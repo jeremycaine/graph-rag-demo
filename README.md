@@ -1,182 +1,40 @@
-# RAG Demo: State of the Union Speech Analysis
+# Graph RAG
 
-A demonstration comparing Retrieval Augmented Generation (RAG) vs vanilla LLM responses using Anthropic's Claude API and the classic "State of the Union" speech.
+## 0. Setup
+Run `./setup.sh`
 
-## 🎯 What This Demonstrates
+Copy `.env.sample` to `.env` and populate with Anthropic key and Astra keys.
 
-This demo shows how RAG improves LLM responses by:
-- **Vanilla LLM**: Claude answers based purely on its training data (may be outdated or lack specific details)
-- **RAG-Enhanced**: Claude answers using retrieved, relevant excerpts from the actual speech (accurate, specific, grounded)
+## 1. Vanilla LLM
+`python 1-vanilla-llm.py`
 
-## 🛠️ Setup Instructions
+The State of the Union speech became the "Hello World" text for early GenAI experiements. This script asks 3 questions about Biden's speech in 2022.
 
-### Prerequisites
-- Python 3.8 or higher
-- An Anthropic API key ([get one here](https://console.anthropic.com/))
+The questions go direct to the Claude LLM and it responds with that is doens't have the context.
 
-### Quick Setup (Recommended)
+## 2. Comparing against Simple RAG approach
+`python 2-simple-raf-compare.py`
 
-1. **Run the setup script:**
-   ```bash
-   bash setup.sh
-   ```
+This takes a long piece of text summarising about technology in 2024. It has three questions that are posed directly to the LLM, and then against the RAG context.
 
-2. **Set your API key:**
-   ```bash
-   export ANTHROPIC_API_KEY='your-api-key-here'
-   ```
+It doesn't always given an answer when just using the LLM. For the RAG response you can see the text in the `tech_report_2024.txt` that is had used in creating the response.
 
-3. **Run the demo:**
-   ```bash
-   source venv/bin/activate  # If not already activated
-   python rag_demo.py
-   ```
+## 3. Vectorstore
+`python 3-vectorstore-rag.py`
 
-### Manual Setup
+This version uses Astra DB as a vector store for documents (text, plus metadata) created from the ingestion chunk text. It puts the vectors in a collection called `acme_3_vectorstore`.
 
-If you prefer to set up manually:
+## 4. Vectorstore with Graph
+`python 4-vectorstore-with-graph-rag.py`
 
-1. **Create a virtual environment:**
-   ```bash
-   python3 -m venv venv
-   ```
+Now graph metadata and topic detection is added in. Here a manually craftedset of keywords are grouped into topics which are added as metadata to the graph links associated with the documents that get inserted into the vector store.
 
-2. **Activate the virtual environment:**
-   ```bash
-   # On Linux/Mac:
-   source venv/bin/activate
-   
-   # On Windows:
-   venv\Scripts\activate
-   ```
+The script compares the standard retrieval approach vs. a metadata one (the knowledge graph). For the Graph retrieval it first finds the docs using the standard retrieval approahc, then using the metadata. in the knowledge graph it finds related chunks, creating an expanded retrieved set of data. You see in the trace output many more more chunks being used.This is passed to the LLM for context in generation of response. This expanded set of relevant data means the LLM can generated a more accurate response.
 
-3. **Install dependencies:**
-   ```bash
-   pip install --upgrade pip
-   pip install -r requirements.txt
-   ```
+## 5. Graph Metrics
+`python 5-graph-metrics.py`
 
-4. **Set your API key:**
-   ```bash
-   # On Linux/Mac:
-   export ANTHROPIC_API_KEY='your-api-key-here'
-   
-   # On Windows (Command Prompt):
-   set ANTHROPIC_API_KEY=your-api-key-here
-   
-   # On Windows (PowerShell):
-   $env:ANTHROPIC_API_KEY="your-api-key-here"
-   ```
+This is the same as `4. Vectorstore with Graph` but now with auto-discovery of topics and keywords for the knowledge graph. It also generates metrics about that show the improvement of using Graph based retrieval over Standard retrieval.
 
-5. **Run the demo:**
-   ```bash
-   python rag_demo.py
-   ```
 
-## 🔑 Getting Your Anthropic API Key
 
-1. Go to [https://console.anthropic.com/](https://console.anthropic.com/)
-2. Sign up or log in
-3. Navigate to API Keys section
-4. Create a new API key
-5. Copy and use it in the setup steps above
-
-## 📋 What the Demo Does
-
-1. **Downloads** the 2022 State of the Union speech
-2. **Chunks** the text into manageable pieces
-3. **Creates embeddings** using sentence-transformers
-4. **Compares responses** for questions like:
-   - "What did Biden say about Ukraine?"
-   - "What did Biden say about inflation?"
-   - "What did Biden mention about COVID-19?"
-
-For each question, you'll see:
-- ❌ Vanilla LLM response (without context)
-- ✅ RAG-enhanced response (with retrieved context)
-- 📚 The actual chunks retrieved from the speech
-
-## 🧩 How It Works
-
-```
-User Question: "What did Biden say about Ukraine?"
-        ↓
-    [Embedding Model]
-        ↓
-    Query Embedding
-        ↓
-    [Similarity Search]
-        ↓
-    Top 3 Relevant Chunks
-        ↓
-    [LLM with Context]
-        ↓
-    Accurate, Grounded Answer
-```
-
-## 🔧 Architecture
-
-- **Embedding Model**: `all-MiniLM-L6-v2` (fast, efficient sentence embeddings)
-- **LLM**: Claude Sonnet 4 via Anthropic API
-- **Retrieval**: Cosine similarity between query and chunk embeddings
-- **Chunking**: 500 words per chunk with 50-word overlap
-
-## 📦 Dependencies
-
-- `anthropic` - Anthropic API client
-- `sentence-transformers` - For creating embeddings
-- `scikit-learn` - For similarity calculations
-- `numpy` - Numerical operations
-- `torch` - PyTorch (required by sentence-transformers)
-
-## 💡 Customization
-
-You can modify the demo to:
-- Use different documents (change the `load_state_of_union` method)
-- Adjust chunk size and overlap
-- Change the number of retrieved chunks (top_k)
-- Try different embedding models
-- Add your own questions
-
-## 🧪 Example Output
-
-```
-QUESTION: What did Biden say about Ukraine?
-================================================================================
-
-📝 VANILLA LLM RESPONSE (No Context):
---------------------------------------------------------------------------------
-I don't have access to specific State of the Union addresses...
-
-🔍 RAG-ENHANCED RESPONSE (With Retrieved Context):
---------------------------------------------------------------------------------
-Biden spoke about Ukraine's resistance against Russian invasion, praising 
-the courage of President Zelenskyy and the Ukrainian people...
-
-📚 RETRIEVED CONTEXT (Top 3 chunks):
---------------------------------------------------------------------------------
-Chunk 1 (Similarity: 0.8234):
-Six days ago, Russia's Vladimir Putin sought to shake the foundations...
-```
-
-## 🚀 Next Steps
-
-After running this demo, you can:
-- Experiment with your own documents
-- Try different questions
-- Adjust the RAG parameters (chunk size, top_k, etc.)
-- Explore more advanced RAG techniques (hybrid search, reranking, etc.)
-
-## 📝 Notes
-
-- The first run will download the embedding model (~80MB)
-- API calls to Anthropic will incur costs (check their pricing)
-- The demo uses a fallback text if the download fails
-
-## 🤝 Contributing
-
-Feel free to modify and extend this demo for your own use cases!
-
-## 📄 License
-
-This is a demonstration project. Use freely for learning and experimentation.

@@ -3,3 +3,10 @@ sentence-transformers
 scikit-learn
 numpy
 torch
+python-dotenv
+langchain
+langchain-core
+langchain-astradb
+langchain-anthropic
+langchain-huggingface
+langchain-text-splitters
