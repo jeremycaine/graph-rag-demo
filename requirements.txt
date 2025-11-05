@@ -10,3 +10,4 @@ langchain-astradb
 langchain-anthropic
 langchain-huggingface
 langchain-text-splitters
+ibm-watsonx-ai
