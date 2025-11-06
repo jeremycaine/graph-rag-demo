@@ -1,5 +1,5 @@
 import os
-# Suppress tokenizers parallelism warning
+# Suppress tokenizers parallelism warning - needs to be upfront before other imports
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 from dotenv import load_dotenv
@@ -13,8 +13,6 @@ from langchain_astradb import AstraDBVectorStore
 from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.documents import Document
-
-# NEW: GraphRAG imports
 from langchain_community.graph_vectorstores.extractors import KeybertLinkExtractor
 from langchain_graph_retriever import GraphRetriever
 from graph_retriever.strategies import Eager
@@ -167,7 +165,7 @@ def format_docs(docs):
 
 # Helper function to generate response using Watsonx AI
 def generate_response(context, question):
-    """Generate response using IBM Watsonx AI ModelInference"""
+    """Generate response using LLM"""
     formatted_prompt = prompt.format(context=context, question=question)
     response = llm.generate_text(prompt=formatted_prompt)
     return response
@@ -217,7 +215,7 @@ for question in questions:
     print("-" * 80)
     
     # Create GraphRetriever
-    # The edge format is: (metadata_field, metadata_field_to_match)
+    # Edge format is: (metadata_field, metadata_field_to_match)
     # We're saying: "follow documents that share keywords"
     graph_retriever = GraphRetriever(
         store=vectorstore,

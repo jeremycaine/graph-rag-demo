@@ -1,4 +1,5 @@
 # Graph RAG
+Needs Python 3.12
 
 ## 0. Setup
 Run `./setup.sh`
