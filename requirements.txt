@@ -8,6 +8,10 @@ langchain
 langchain-core
 langchain-astradb
 langchain-anthropic
+langchain_community
 langchain-huggingface
 langchain-text-splitters
 ibm-watsonx-ai
+langchain_graph_retriever
+graph_retriever
+keybert

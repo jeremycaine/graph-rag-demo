@@ -6,31 +6,31 @@ from dotenv import load_dotenv
 
 from ibm_watsonx_ai import Credentials
 from ibm_watsonx_ai.foundation_models import ModelInference
-from ibm_watsonx_ai.foundation_models.utils.enums import ModelTypes
 
-import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_astradb import AstraDBVectorStore
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_anthropic import ChatAnthropic
+from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnablePassthrough
-from langchain_core.documents.base import Document
+from langchain_core.documents import Document
+
+# NEW: GraphRAG imports
+from langchain_community.graph_vectorstores.extractors import KeybertLinkExtractor
+from langchain_graph_retriever import GraphRetriever
+from graph_retriever.strategies import Eager
 
 # Load environment variables
 load_dotenv(override=True)
 
 # Get credentials
-wx_project_id = os.getenv("WX_PRODUCT_ID")
+wx_project_id = os.getenv("WX_PROJECT_ID")
 wx_api_key = os.getenv("WX_API_KEY")
 astra_endpoint = os.getenv("ASTRA_DB_API_ENDPOINT")
 astra_token = os.getenv("ASTRA_DB_APPLICATION_TOKEN")
 
 # Verify they loaded
 print("=" * 80)
-print("RAG Demo: Graph-Enhanced Vector Store")
+print("RAG Demo: Graph-Enhanced Vector Store with KeybertLinkExtractor")
 print("=" * 80)
 
 credentials = Credentials(
@@ -38,32 +38,34 @@ credentials = Credentials(
     url="https://us-south.ml.cloud.ibm.com"  # Change region if needed
 )
 
-# initialize foundation model
-model_id = "ibm/granite-3-8b-instruct"  # Or any from the supported list
+# Initialize foundation model for generation
+print("\nInitializing LLM...")
+model_id = "ibm/granite-3-8b-instruct"
 
-model = ModelInference(
+llm = ModelInference(
     model_id=model_id,
     credentials=credentials,
     project_id=wx_project_id,
     params={
         "decoding_method": "greedy",
-        "max_new_tokens": 100,
-        "min_new_tokens": 1,
-        "repetition_penalty": 1.0
+        "max_new_tokens": 500,
+        "min_new_tokens": 50,
+        "repetition_penalty": 1.1,
+        "temperature": 0.1,
     }
 )
 
-# get input file
+# Get input file
 input_file = os.getenv("INPUT_FILE")
 
 # Initialize embedding model
-print("\nLoading embedding model...")
+print("Loading embedding model...")
 embedding = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
 # Initialize vector store
 print("Connecting to AstraDB vector store...")
 vectorstore = AstraDBVectorStore(
-    collection_name="acme_4_graph",
+    collection_name="acme_graphrag_keybert",
     embedding=embedding,
     api_endpoint=astra_endpoint,
     token=astra_token,
@@ -71,7 +73,7 @@ vectorstore = AstraDBVectorStore(
 print(f"Vector store connected")
 
 # Clear existing data for clean reload
-print("\nClearing existing data from vector store...")
+print("Clearing existing data from vector store...")
 try:
     vectorstore.clear()
     print("Vector store cleared")
@@ -79,120 +81,106 @@ except Exception as e:
     print(f"Could not clear vector store (might be empty): {e}")
 
 # Load the input file
-print("\nLoading input file...")
+print("Loading input file...")
 with open(input_file, "r", encoding="utf-8") as f:
     speech_text = f.read()
 print(f"Loaded {len(speech_text)} characters")
 
 # Split text into chunks
-print("\nSplitting text into chunks...")
+print("Splitting text into chunks...")
 text_splitter = RecursiveCharacterTextSplitter(
     chunk_size=1000,
     chunk_overlap=200,
     length_function=len,
 )
-
 chunks = text_splitter.split_text(speech_text)
 print(f"Created {len(chunks)} chunks")
 
-print("\n🧩 Method 2: Clustering chunks by semantic similarity...")
-
-def cluster_chunks_semantic(chunks, embedding_model, n_clusters=5):
-    """Cluster chunks based on semantic embeddings"""
-    if len(chunks) < n_clusters:
-        n_clusters = max(2, len(chunks) // 2)
-    
-    print(f"   Creating embeddings for clustering...")
-    chunk_embeddings = embedding_model.embed_documents(chunks)
-    chunk_embeddings_array = np.array(chunk_embeddings)
-    
-    print(f"   Running K-means clustering with {n_clusters} clusters...")
-    kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
-    cluster_labels = kmeans.fit_predict(chunk_embeddings_array)
-    
-    # Create topic names from cluster centers
-    topic_names = [f"topic_{i}" for i in range(n_clusters)]
-    
-    # Assign topics to chunks
-    chunk_topics = []
-    for i, label in enumerate(cluster_labels):
-        chunk_topics.append([topic_names[label]])
-    
-    return chunk_topics, topic_names
-
-chunk_topics, discovered_topics = cluster_chunks_semantic(chunks, embedding, n_clusters=5)
-print(f"✅ Discovered {len(discovered_topics)} topic clusters")
-print(f"   Topics: {discovered_topics}")
-
-# Create documents with auto-discovered metadata
-print("\n📚 Creating documents with graph relationships...")
-docs = []
-
+# Convert chunks to documents (initial docs without keywords)
+print("\nCreating documents from chunks...")
+temp_docs = []
 for i, chunk in enumerate(chunks):
-    metadata = {
-        "source": input_file,
-        "chunk_id": i,
-        "total_chunks": len(chunks),
-        "graph_links": [],
-        "topics": chunk_topics[i],  # From clustering
-        "keywords": keywords_per_chunk[i] if i < len(keywords_per_chunk) else []
-    }
-    
-    links_data = []
-    
-    # Sequential links
-    if i > 0:
-        links_data.append({"kind": "sequential", "tag": f"chunk_{i-1}", "direction": "bidir"})
-    if i < len(chunks) - 1:
-        links_data.append({"kind": "sequential", "tag": f"chunk_{i+1}", "direction": "bidir"})
-    
-    # Self-reference
-    links_data.append({"kind": "identity", "tag": f"chunk_{i}", "direction": "bidir"})
-    
-    # Topic-based links (connect chunks in same cluster)
-    for topic in chunk_topics[i]:
-        links_data.append({"kind": "topic", "tag": topic, "direction": "bidir"})
-    
-    metadata["graph_links"] = links_data
-    
-    doc = Document(page_content=chunk, metadata=metadata)
-    docs.append(doc)
+    doc = Document(
+        page_content=chunk,
+        metadata={
+            "source": input_file,
+            "chunk_id": i,
+            "total_chunks": len(chunks),
+        }
+    )
+    temp_docs.append(doc)
 
-print(f"✅ Created {len(docs)} documents with auto-discovered topics")
+# Extract keywords using KeybertLinkExtractor
+print("\nExtracting keywords with KeyBERT...")
+keyword_extractor = KeybertLinkExtractor(kind="kw")
+
+# Extract keywords but convert to simple lists
+docs = []
+for i, doc in enumerate(temp_docs):
+    # Extract keywords as Link objects
+    links = keyword_extractor.extract_one(doc)
+    
+    # Convert Link objects to a simple list of keyword strings
+    keywords = [link.tag for link in links]
+    
+    # Create new document with keywords as a list in metadata
+    new_doc = Document(
+        page_content=doc.page_content,
+        metadata={
+            "source": input_file,
+            "chunk_id": i,
+            "total_chunks": len(chunks),
+            "keywords": keywords  # Simple list, not Link objects
+        }
+    )
+    docs.append(new_doc)
+    
+print(f"Extracted keywords for {len(docs)} documents")
+
+# Show example of extracted keywords
+print("\nExample document with keywords:")
+if docs:
+    example_doc = docs[0]
+    print(f"Chunk {example_doc.metadata['chunk_id']}:")
+    print(f"Content preview: {example_doc.page_content[:100]}...")
+    keywords = example_doc.metadata.get('keywords', [])
+    print(f"Extracted {len(keywords)} keywords: {keywords[:5]}")
 
 # Add documents to vector store
-print(f"\n⬆️  Adding {len(docs)} documents to vector store...")
+print(f"\nAdding {len(docs)} documents to vector store...")
 vectorstore.add_documents(docs)
-print("✅ Documents added to vector store")
-
-# Initialize LLM
-print("\n🤖 Initializing Anthropic LLM...")
-llm = ChatAnthropic(
-    model="claude-sonnet-4-20250514",
-    anthropic_api_key=anthropic_api_key,
-    temperature=0,
-)
+print("Documents added to vector store")
 
 # Create prompt template
-prompt = ChatPromptTemplate.from_template("""
+prompt_template = """
 Here is the context: {context}
 
 Based on the context above, answer this question: {question}
-""")
+
+Answer:"""
+
+prompt = PromptTemplate.from_template(prompt_template)
 
 # Helper function to format retrieved documents
 def format_docs(docs):
     return "\n\n".join(doc.page_content for doc in docs)
 
-# Questions to test
+# Helper function to generate response using Watsonx AI
+def generate_response(context, question):
+    """Generate response using IBM Watsonx AI ModelInference"""
+    formatted_prompt = prompt.format(context=context, question=question)
+    response = llm.generate_text(prompt=formatted_prompt)
+    return response
+
+# Questions
 questions = [
-    "How is AI used across different industries?",
-    "What are all the climate technologies mentioned?",
-    "What happened after quantum breakthroughs?" 
+    "What did Biden say about Ukraine?",
+    "What did Biden say about inflation?",
+    "What did Biden mention about COVID-19?"
 ]
 
 print("\n" + "=" * 80)
-print("RUNNING COMPARISONS: Standard vs Metadata-Enhanced Retrieval")
+print("RUNNING COMPARISONS: Standard Vector Search vs GraphRAG")
 print("=" * 80)
 
 for question in questions:
@@ -201,78 +189,73 @@ for question in questions:
     print("=" * 80)
     
     # ==================== STANDARD VECTOR SEARCH ====================
-    print("\n📊 STANDARD VECTOR SEARCH (similarity only):")
+    print("\nSTANDARD VECTOR SEARCH (similarity only):")
     print("-" * 80)
     
     standard_retriever = vectorstore.as_retriever(
         search_kwargs={"k": 3}
     )
     
-    standard_chain = (
-        {"context": standard_retriever | format_docs, "question": RunnablePassthrough()}
-        | prompt
-        | llm
-    )
-    
-    standard_response = standard_chain.invoke(question)
-    print(standard_response.content)
-    
-    print("\n📚 Retrieved chunks (standard):")
+    # Retrieve documents
     standard_docs = standard_retriever.invoke(question)
+    
+    # Format context and generate response
+    standard_context = format_docs(standard_docs)
+    standard_response = generate_response(standard_context, question)
+    
+    print(standard_response)
+    
+    print("\nRetrieved chunks (standard):")
     for i, doc in enumerate(standard_docs, 1):
         chunk_id = doc.metadata.get('chunk_id', 'N/A')
-        topics = doc.metadata.get('topics', [])
-        topics_str = f" [Topics: {', '.join(topics)}]" if topics else ""
-        print(f"  Chunk {chunk_id}{topics_str}")
+        keywords = doc.metadata.get('keywords', [])[:3]
+        keywords_str = f" [Keywords: {', '.join(keywords)}]" if keywords else ""
+        print(f"  Chunk {chunk_id}{keywords_str}")
     
-    # ==================== METADATA-ENHANCED SEARCH ====================
-    print("\n\n🕸️  METADATA-ENHANCED SEARCH (similarity + graph metadata):")
+    # ==================== GRAPHRAG WITH GRAPH RETRIEVER ====================
+    print("\n\nGRAPHRAG (similarity + graph traversal):")
     print("-" * 80)
     
-    # First get initial results
-    initial_docs = standard_retriever.invoke(question)
-    
-    # Expand using graph metadata
-    expanded_chunk_ids = set()
-    for doc in initial_docs:
-        chunk_id = doc.metadata.get('chunk_id')
-        expanded_chunk_ids.add(chunk_id)
-        
-        # Add sequential neighbors
-        for link in doc.metadata.get('graph_links', []):
-            if link['kind'] == 'sequential':
-                neighbor_id = int(link['tag'].split('_')[1])
-                expanded_chunk_ids.add(neighbor_id)
-    
-    # Retrieve expanded set
-    expanded_docs = []
-    for chunk_id in sorted(expanded_chunk_ids):
-        # Search for document with this chunk_id
-        results = vectorstore.similarity_search(
-            question,
-            k=50,  # Get more to find specific chunks
-            filter={"chunk_id": chunk_id}
+    # Create GraphRetriever
+    # The edge format is: (metadata_field, metadata_field_to_match)
+    # We're saying: "follow documents that share keywords"
+    graph_retriever = GraphRetriever(
+        store=vectorstore,
+        edges=[("keywords", "keywords")],  # Connect docs with shared keywords
+        strategy=Eager(
+            start_k=3,      # Initial vector search results
+            k=12,           # Max total results after graph traversal
+            max_depth=2     # Two hops in the graph
         )
-        if results:
-            expanded_docs.append(results[0])
-    
-    # Format and send to LLM
-    expanded_context = format_docs(expanded_docs)
-    expanded_response = llm.invoke(
-        prompt.format_messages(context=expanded_context, question=question)
     )
     
-    print(expanded_response.content)
+    # Retrieve documents using graph traversal
+    graph_docs = graph_retriever.invoke(question)
     
-    print("\n📚 Retrieved chunks (metadata-enhanced):")
-    for i, doc in enumerate(expanded_docs, 1):
+    # Format context and generate response
+    graph_context = format_docs(graph_docs)
+    graph_response = generate_response(graph_context, question)
+    
+    print(graph_response)
+    
+    print("\nRetrieved chunks (GraphRAG):")
+    for i, doc in enumerate(graph_docs, 1):
         chunk_id = doc.metadata.get('chunk_id', 'N/A')
-        topics = doc.metadata.get('topics', [])
-        topics_str = f" [Topics: {', '.join(topics)}]" if topics else ""
-        print(f"  Chunk {chunk_id}{topics_str}")
+        keywords = doc.metadata.get('keywords', [])[:3]
+        keywords_str = f" [Keywords: {', '.join(keywords)}]" if keywords else ""
+        print(f"  Chunk {chunk_id}{keywords_str}")
     
-    print(f"\nℹ️  Standard retrieved {len(standard_docs)} chunks, Metadata-enhanced retrieved {len(expanded_docs)} chunks")
+    print(f"\nStandard retrieved {len(standard_docs)} chunks, GraphRAG retrieved {len(graph_docs)} chunks")
+    
+    # Show which chunks were added by graph traversal
+    standard_chunk_ids = {doc.metadata.get('chunk_id') for doc in standard_docs}
+    graph_chunk_ids = {doc.metadata.get('chunk_id') for doc in graph_docs}
+    added_by_graph = graph_chunk_ids - standard_chunk_ids
+    if added_by_graph:
+        print(f"Chunks added by graph traversal: {sorted(added_by_graph)}")
+    else:
+        print(f"No chunks added by graph traversal")
 
 print("\n" + "=" * 80)
-print("End - RAG Demo: Graph-Enhanced Vector Store")
+print("End - RAG Demo: Graph-Enhanced Vector Store with KeybertLinkExtractor")
 print("=" * 80)
