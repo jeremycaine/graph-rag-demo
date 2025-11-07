@@ -12,6 +12,6 @@ Project
         - Location: Dallas
 
 - Manage > General
-    Project id: 2388c86e-fdea-45c8-8689-a59a6a1bddaa
+    Project id: 
     
 - IBM Cloud - Manage IAM > API Key
