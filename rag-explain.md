@@ -188,3 +188,62 @@ Cosine similarity = cos(45°) = 0.707
 
 Similar meaning = Small angle = High score (close to 1)
 Different meaning = Large angle = Low score (close to 0)
+```
+
+## How Graph Traversal Works
+
+### Standard Vector Search
+```
+Query: "What did Biden say about Ukraine?"
+  ↓
+[Vector similarity search]
+  ↓
+Top 3 most similar chunks
+```
+
+### Graph-Traversal Search
+```
+Query: "What did Biden say about Ukraine?"
+  ↓
+[Vector similarity search]
+  ↓
+Initial top 3 chunks
+  ↓
+[Follow graph edges with depth=2]
+  ↓
+• Previous/next chunks (sequential links)
+• Other Ukraine chunks (topic links)
+• Related entities (entity links)
+  ↓
+More comprehensive context (5-10+ chunks)
+```
+
+## Benefits of Graph Metadata
+
+1. **More Context**: Retrieves related chunks beyond just similarity
+2. **Narrative Flow**: Can include preceding/following content
+3. **Topic Clustering**: Finds all content on same subject
+4. **Better Answers**: LLM gets fuller picture
+
+## Example Comparison
+
+**Question**: "What did Biden say about Ukraine?"
+
+**Standard retrieval (k=3)**:
+- Chunk 15: "Putin invaded Ukraine..."
+- Chunk 18: "Ukrainian people are brave..."
+- Chunk 22: "We support Ukraine..."
+
+**Graph traversal (k=3, depth=2)**:
+- Chunk 15: "Putin invaded Ukraine..."
+  - → Chunk 14 (sequential: context before)
+  - → Chunk 16 (sequential: context after)
+  - → Chunk 18 (topic: also about Ukraine)
+- Chunk 18: "Ukrainian people are brave..."
+  - → Chunk 17 (sequential)
+  - → Chunk 22 (topic: Ukraine support)
+- Chunk 22: "We support Ukraine..."
+  - → Chunk 21, 23 (sequential)
+
+Result: 8-9 chunks with better context flow
+

@@ -171,7 +171,13 @@ def generate_response(context, question):
     return response
 
 # Questions
-questions = [
+questions1 = [
+    "How is AI used across different industries?",
+    "What are all the climate technologies mentioned?",
+    "What happened after quantum breakthroughs?" 
+]
+
+questions2 = [
     "What did Biden say about Ukraine?",
     "What did Biden say about inflation?",
     "What did Biden mention about COVID-19?"
@@ -181,7 +187,7 @@ print("\n" + "=" * 80)
 print("RUNNING COMPARISONS: Standard Vector Search vs GraphRAG")
 print("=" * 80)
 
-for question in questions:
+for question in questions2:
     print("\n" + "=" * 80)
     print(f"QUESTION: {question}")
     print("=" * 80)

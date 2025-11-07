@@ -2,9 +2,6 @@
 
 # RAG Demo Setup Script
 
-echo "Setting up RAG Demo Environment"
-echo "=================================="
-
 # Create virtual environment
 echo -e "\nCreating virtual environment..."
 python3 -m venv venv
