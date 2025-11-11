@@ -298,7 +298,7 @@ for i, question in enumerate(questions2):
         last_question = question
         standard_docs_final = standard_docs
         graph_docs_final = graph_docs
-        print("\n✅ Stored final retrieval results for visualization.")
+        print("\nStored final retrieval results for visualization.")
 
 print("\n" + "=" * 80)
 print("End - RAG Demo: Graph-Enhanced Vector Store with KeybertLinkExtractor")
@@ -418,5 +418,5 @@ def visualize_graph_rag_comparison_pyvis(question, standard_docs, graph_docs, fi
 # Assuming you run your RAG loop, you would call it like this:
 #
 
-last_question = "What did Biden mention about COVID-19?" # from your questions2 list
+last_question = "What did Biden say about Ukraine?" 
 output = visualize_graph_rag_comparison_pyvis(last_question, standard_docs_final, graph_docs_final)
