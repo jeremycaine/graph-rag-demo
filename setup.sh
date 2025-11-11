@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# RAG Demo Setup Script
+pyenv local 3.12.3
 
 # Create virtual environment
 echo -e "\nCreating virtual environment..."

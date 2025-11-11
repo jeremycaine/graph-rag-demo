@@ -1,5 +1,4 @@
 anthropic
-sentence-transformers
 scikit-learn
 numpy
 torch
@@ -9,10 +8,12 @@ langchain-core
 langchain-astradb
 langchain-anthropic
 langchain_community
-langchain-huggingface
-langchain-text-splitters
-ibm-watsonx-ai
 langchain_graph_retriever
+langchain-huggingface
+langchain_ibm
+langchain-text-splitters
 graph_retriever
+ibm-watsonx-ai
 keybert
-sentence-transformers
+pyvis
+networkx
