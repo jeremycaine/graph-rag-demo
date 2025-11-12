@@ -1,18 +1,18 @@
 # Graph RAG
 
-## 0. Setup
+## Setup
 Use Python 3.12
+
 Run `./setup.sh`
 
-For the watsonx AI samples c
-opy `.env.sample` to `.env` and populate with Anthropic key or Watsonx keys and Astra keys.
+Copy `.env.sample` to `.env` and populate with Anthropic key or Watsonx keys and Astra keys.
 
 There are different input files to test:
 - `./state_of_union_2022_clip.txt`
 - `./state_of_union_2022_full.txt`
 - `./tech_report_2024.txt`
 
-Then you have different question sets you can adjust and use
+Then you have different question sets you can use or change
 ```
 # Questions
 questions1 = [
@@ -27,6 +27,11 @@ questions2 = [
     "What did Biden mention about COVID-19?"
 ]
 ```
+
+## Main demo scripts
+- [vanilla-llm.py](./vanilla-llm.py) simple use of Anthropic Claude LLM to answers questions
+- [vanilla-vs-rag.py](./vanilla-vs-rag.py) use a RAG approach, holding chunks and documents in memory and compare answers to questions against vanilla LLM
+- [wx-simple-rag-vs-graph.py](./wx-simple-rag-vs-graph-rag.py) use IBM watsonx.ai and its open source models; storing in a vector database, compare simple upload vs knowledge grpah upload
 
 ## IBM watsonx.ai setup
 

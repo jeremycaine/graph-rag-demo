@@ -1,6 +1,8 @@
-## Original Text → Chunks → Embeddings → Vector Database
+# RAG and Graph RAG Explained 
 
-**1. Text Chunking**
+## Phase 1: Original Text → Chunks → Embeddings → Vector Database
+
+**Text Chunking**
 ```
 "Madam Speaker, Madam Vice President... [5000 words]"
 ↓
@@ -9,23 +11,19 @@ Chunk 2: "Six days ago, Russia's Vladimir Putin..." (500 words)
 Chunk 3: "Tonight, I'm announcing a crackdown..." (500 words)
 ```
 
-**2. Convert to Embeddings (Vectors)**
+**Convert to Embeddings (Vectors)**
 ```
 Chunk 1 text → Embedding Model → [0.23, -0.45, 0.89, ..., 0.12]
                                   (384 numbers for MiniLM)
 ```
 
-**What embeddings actually are:**
-- **NOT a compression** of the text
-- **A mathematical representation** of the text's *meaning*
-- Numbers in high-dimensional space where similar meanings = similar locations
-- Think of it like GPS coordinates for ideas!
+Embeddings are a mathematical representation** of the text's meaning. Text is given numeric dimensions (vectors). Similar meanings have numbers 'close' to each other.
 ```
 Example (simplified to 2D):
-"Ukraine war"     → [0.8, 0.9]  ← Close together
+"Ukraine war"     → [0.8, 0.9]  ← These two phrases are close together
 "Russia conflict" → [0.82, 0.88] ← in vector space
 
-"Ice cream"       → [-0.5, 0.2]  ← Far away
+"Ice cream"       → [-0.5, 0.2]  ← but far away from the meaning of this text
 ```
 
 ## Phase 2: Query Time (Every Question)
@@ -34,26 +32,26 @@ Example (simplified to 2D):
 ```
 User asks: "What did Biden say about Ukraine?"
 ↓
-Embedding Model (SAME model as before)
+Embedding Model
 ↓
 Query Vector: [0.81, 0.89, -0.23, ..., 0.45]
 ```
 
-**Step 2: Similarity Search (The Magic!)**
+**Step 2: Similarity Search**
 ```
 Compare query vector to ALL chunk vectors using cosine similarity:
 
 Query:   [0.81, 0.89, ...]
 Chunk 1: [0.23, -0.45, ...] → Similarity: 0.34 (not relevant)
-Chunk 2: [0.79, 0.91, ...]  → Similarity: 0.92 (VERY relevant!)
+Chunk 2: [0.79, 0.91, ...]  → Similarity: 0.92 (very relevant!)
 Chunk 3: [0.15, -0.12, ...] → Similarity: 0.18 (not relevant)
 
 Pick top 3 most similar chunks (top_k setting)
 
-The chunks (text) are joined together to create a piece of context text
+The text of the returned chunks are joined together to create a piece of context text
 ```
 
-**Step 3: Send to LLM (This is Key!)**
+**Step 3: Add the context to question sent to LLM**
 ```
 The LLM receives the context text, not embeddings (numbers)
 
@@ -72,7 +70,7 @@ Prompt to Claude:
 
 **Step 4: LLM Response**
 ```
-Claude reads the text (not vectors) and generates an answer
+LLM reads the text and generates an answer
 ↓
 "Biden praised the Ukrainian people's courage
 in resisting Putin's invasion..."
@@ -80,18 +78,18 @@ in resisting Putin's invasion..."
 
 ## Key Insights
 
-### Embeddings are ONLY for Finding, NOT for Reading
+### Embeddings are for Finding, not for Reading
 ```
 ┌─────────────────────────────────────────────────┐
-│ Embeddings (vectors): Used ONLY for search     │
-│ - Query vector → Find similar chunk vectors    │
-│ - Think: "Which chunks are relevant?"          │
+│ Embeddings (vectors): Used ONLY for search      │
+│ - Query vector → Find similar chunk vectors     │
+│ - i.e. "Which chunks are relevant?"             │
 └─────────────────────────────────────────────────┘
                     ↓
 ┌─────────────────────────────────────────────────┐
 │ Original Text: Sent to the LLM                  │
-│ - Actual words from matching chunks            │
-│ - LLM reads and understands like humans do     │
+│ - Actual words from matching chunks             │
+│ - LLM reads and understands like humans do      │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -106,22 +104,6 @@ in resisting Putin's invasion..."
    - Large, general model
    - Job: Understand text and generate responses
    - Used for: Reading context and answering questions
-
-### The Vector Numbers NEVER Convert Back to Text
-
-This is crucial to understand:
-```
-❌ WRONG: Vectors → Decode → Text → LLM
-✓ RIGHT: 
-  - Vectors help FIND which chunks are relevant
-  - Original text of those chunks → LLM
-```
-
-The vectors are like an **index in a library**:
-- You search the index (vectors) to find relevant books
-- But you read the actual books (text), not the index
-
-When a vector store is used, a retriever function finds the relevant chunks (top_k) and get the text 'content' from the vector record.
 
 ## Visual Example
 ```
@@ -146,21 +128,21 @@ Step 4: Build Prompt
 Context: [actual text from chunks above]
 Question: "What about inflation?"
 
-Step 5: Send to Claude
-Claude reads the TEXT and responds
+Step 5: Send to LLM
+LLM reads the text and responds
 
-Step 6: Claude's Response
+Step 6: LLM's Response
 "Biden announced several measures to fight inflation,
 including a crackdown on shipping costs..."
 ```
 
-## Why This Works Better Than Vanilla LLM
+## RAG compared to vanilla LLM
 
 **Vanilla LLM:**
 ```
 Question: "What did Biden say about inflation?"
 ↓
-Claude's training data (might not include this specific speech)
+LLM's training data (might not include this specific speech)
 ↓
 Generic answer or "I don't have that information"
 ```
@@ -171,12 +153,12 @@ Question: "What did Biden say about inflation?"
 ↓
 Semantic search finds EXACT relevant paragraphs
 ↓
-Claude reads those specific paragraphs
+LLM reads those specific paragraphs
 ↓
 Accurate, specific answer with exact details
 ```
 
-## 🔬 The Math Behind Similarity
+## The Math Behind Similarity
 
 Cosine similarity measures the angle between vectors:
 ```
@@ -190,7 +172,7 @@ Similar meaning = Small angle = High score (close to 1)
 Different meaning = Large angle = Low score (close to 0)
 ```
 
-## How Graph Traversal Works
+## How Graph Traversal Works (Graph RAG)
 
 ### Standard Vector Search
 ```
